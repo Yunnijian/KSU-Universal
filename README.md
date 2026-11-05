@@ -5,9 +5,6 @@
 `/proc/kernelsu_manager` 在运行时切换 primary manager，无需卸载模块、
 重新 late-load 或重启系统。
 
-本项目是独立的内核模块工程：只包含内核模块源码、UAPI、构建脚本和可选的
-late-load loader 构建说明，不包含任何宿主应用代码。
-
 ## 支持范围
 
 | Profile | 包名 | versionCode | feature_max | 证书长度 |
@@ -150,10 +147,9 @@ cargo build --release -p ksud --target aarch64-linux-android
   - FinaSU 33168 / `0xb`
 - BakaSU 与 FinaSU 的 `GET_FULL_VERSION` 返回其真实构建串；
 - feature 边界符合预期：10003 只对 Next/SukiSU 开放，16 只对 SukiSU
-  开放，FinaSU 9 号 UTS view 在补齐后可查询。
-
-netisolate 与 per-process UTS view 的代码已编译进 KO，仍需要在新的
-干净 boot 上做运行时回归。
+  开放；
+- FinaSU 的 UTS view（feature 9）与 netisolate（27-32）运行时探针均
+  返回 `supported=true`，配置与状态读取正常。
 
 ## 目录结构
 
@@ -174,7 +170,6 @@ dist/          打包产物（不提交到源码仓库）
   SukiSU 内核实现为底座，不复制三家各自的内核私有行为。
 - 通用 KO 与 stock KSU 同名同 hook，必须在无 KSU 已加载的干净 boot
   上首次加载；已加载 `kernelsu` 时不能热替换。
-- netisolate / UTS view 已实现但尚未完成真机运行时回归。
 
 ## 许可
 
