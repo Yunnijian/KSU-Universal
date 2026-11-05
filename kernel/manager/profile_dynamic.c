@@ -274,6 +274,18 @@ static bool fina_sign_matches(unsigned int cert_size, const char *hash)
     return found;
 }
 
+bool ksu_profile_dynamic_has_state(void)
+{
+    switch (ksu_manager_active_profile()) {
+    case KSU_MANAGER_PROFILE_FINA:
+        return fina_dynamic_enabled && READ_ONCE(fina_sign_count) != 0;
+    case KSU_MANAGER_PROFILE_BAKA:
+        return READ_ONCE(baka_set);
+    default:
+        return false;
+    }
+}
+
 bool ksu_profile_dynamic_match(unsigned int cert_size, const char *hash)
 {
     switch (ksu_manager_active_profile()) {

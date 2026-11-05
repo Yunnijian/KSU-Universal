@@ -10,6 +10,8 @@
 #include <linux/version.h>
 #include <linux/thread_info.h>
 #include "uapi/supercall.h"
+#include "uapi/uts_view.h"
+#include "uapi/netisolate.h"
 #include "supercall/internal.h"
 #include "arch.h" // IWYU pragma: keep
 #include "policy/allowlist.h"
@@ -34,6 +36,8 @@
 #include "infra/symbol_resolver.h"
 #include "preinit/preinit.h"
 #include "feature/uts_spoof.h"
+#include "feature/uts_view.h"
+#include "feature/netisolate.h"
 #include "extension/extension.h"
 #include "extension/umount_paths.h"
 #include "extension/version_spoof.h"
@@ -931,6 +935,8 @@ static int do_fina_set_dynamic_managers(void __user *arg)
     }
     ret = ksu_fina_dynamic_set_signs(signs, cmd.count);
     kfree(signs);
+    if (!ret)
+        track_throne(false);
     return ret;
 }
 
@@ -977,20 +983,119 @@ static int do_fina_set_dynamic_grants(void __user *arg)
     }
     ret = ksu_fina_dynamic_set_grants(appids, cmd.count);
     kfree(appids);
+    if (!ret)
+        track_throne(false);
     return ret;
 }
 
 static int do_fina_get_uts_view(void __user *arg)
 {
-    struct ksu_fina_uts_view_config cmd = { 0 };
+    struct ksu_uts_view_config cfg;
 
     if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
         return -EOPNOTSUPP;
-    /* Optional FinaSU feature; the manager is told it is unavailable. */
-    cmd.state = 0;
-    if (copy_to_user(arg, &cmd, sizeof(cmd)))
+    if (ksu_uts_view_get_config(&cfg))
+        return -ENODEV;
+    if (copy_to_user(arg, &cfg, sizeof(cfg)))
         return -EFAULT;
     return 0;
+}
+
+static int do_fina_set_uts_view(void __user *arg)
+{
+    struct ksu_uts_view_config cfg;
+
+    if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
+        return -EOPNOTSUPP;
+    if (copy_from_user(&cfg, arg, sizeof(cfg)))
+        return -EFAULT;
+    return ksu_uts_view_set_config(&cfg);
+}
+
+static int do_fina_get_netisolate_config(void __user *arg)
+{
+    struct ksu_netisolate_config config;
+    int ret;
+
+    if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
+        return -EOPNOTSUPP;
+    ret = ksu_netisolate_get_config(&config);
+    if (ret)
+        return ret;
+    if (copy_to_user(arg, &config, sizeof(config)))
+        return -EFAULT;
+    return 0;
+}
+
+static int do_fina_set_netisolate_config(void __user *arg)
+{
+    struct ksu_netisolate_config config;
+
+    if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
+        return -EOPNOTSUPP;
+    if (copy_from_user(&config, arg, sizeof(config)))
+        return -EFAULT;
+    return ksu_netisolate_set_config(&config);
+}
+
+static int do_fina_get_netisolate_policies(void __user *arg)
+{
+    struct ksu_netisolate_policies *config;
+    int ret;
+
+    if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
+        return -EOPNOTSUPP;
+    config = kzalloc(sizeof(*config), GFP_KERNEL);
+    if (!config)
+        return -ENOMEM;
+    ret = ksu_netisolate_get_policies(config);
+    if (!ret && copy_to_user(arg, config, sizeof(*config)))
+        ret = -EFAULT;
+    kfree(config);
+    return ret;
+}
+
+static int do_fina_set_netisolate_policies(void __user *arg)
+{
+    struct ksu_netisolate_policies *config;
+    int ret;
+
+    if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
+        return -EOPNOTSUPP;
+    config = kzalloc(sizeof(*config), GFP_KERNEL);
+    if (!config)
+        return -ENOMEM;
+    if (copy_from_user(config, arg, sizeof(*config)))
+        ret = -EFAULT;
+    else
+        ret = ksu_netisolate_set_policies(config);
+    kfree(config);
+    return ret;
+}
+
+static int do_fina_get_netisolate_events(void __user *arg)
+{
+    struct ksu_netisolate_events *events;
+    int ret;
+
+    if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
+        return -EOPNOTSUPP;
+    events = kzalloc(sizeof(*events), GFP_KERNEL);
+    if (!events)
+        return -ENOMEM;
+    ret = ksu_netisolate_get_events(events);
+    if (!ret && copy_to_user(arg, events, sizeof(*events)))
+        ret = -EFAULT;
+    kfree(events);
+    return ret;
+}
+
+static int do_fina_clear_netisolate_events(void __user *arg)
+{
+    (void)arg;
+    if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
+        return -EOPNOTSUPP;
+    return ksu_netisolate_clear_events();
 }
 
 static int do_fina_get_try_umount(void __user *arg)
@@ -1390,43 +1495,43 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
     {
         .cmd = KSU_IOCTL_FINA_SET_UTS_VIEW,
         .name = "FINA_SET_UTS_VIEW",
-        .handler = do_profile_unsupported,
+        .handler = do_fina_set_uts_view,
         .perm_check = manager_or_root
     },
     {
         .cmd = KSU_IOCTL_FINA_GET_NETISOLATE_CONFIG,
         .name = "FINA_GET_NETISOLATE_CONFIG",
-        .handler = do_profile_unsupported,
+        .handler = do_fina_get_netisolate_config,
         .perm_check = manager_or_root
     },
     {
         .cmd = KSU_IOCTL_FINA_SET_NETISOLATE_CONFIG,
         .name = "FINA_SET_NETISOLATE_CONFIG",
-        .handler = do_profile_unsupported,
+        .handler = do_fina_set_netisolate_config,
         .perm_check = manager_or_root
     },
     {
         .cmd = KSU_IOCTL_FINA_GET_NETISOLATE_POLICIES,
         .name = "FINA_GET_NETISOLATE_POLICIES",
-        .handler = do_profile_unsupported,
+        .handler = do_fina_get_netisolate_policies,
         .perm_check = manager_or_root
     },
     {
         .cmd = KSU_IOCTL_FINA_SET_NETISOLATE_POLICIES,
         .name = "FINA_SET_NETISOLATE_POLICIES",
-        .handler = do_profile_unsupported,
+        .handler = do_fina_set_netisolate_policies,
         .perm_check = manager_or_root
     },
     {
         .cmd = KSU_IOCTL_FINA_GET_NETISOLATE_EVENTS,
         .name = "FINA_GET_NETISOLATE_EVENTS",
-        .handler = do_profile_unsupported,
+        .handler = do_fina_get_netisolate_events,
         .perm_check = manager_or_root
     },
     {
         .cmd = KSU_IOCTL_FINA_CLEAR_NETISOLATE_EVENTS,
         .name = "FINA_CLEAR_NETISOLATE_EVENTS",
-        .handler = do_profile_unsupported,
+        .handler = do_fina_clear_netisolate_events,
         .perm_check = manager_or_root
     },
     {

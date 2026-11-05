@@ -21,6 +21,7 @@
 #include "hook/tp_marker.h"
 #include "feature/kernel_umount.h"
 #include "feature/mount_hide.h"
+#include "feature/uts_view.h"
 
 int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
 {
@@ -33,6 +34,7 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
         spin_unlock_irq(&current->sighand->siglock);
 
         ksu_install_fd();
+        ksu_uts_view_on_setresuid(old_uid, new_uid);
         return 0;
     }
 
@@ -49,6 +51,8 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
 
     // Handle kernel umount
     ksu_handle_umount(old_uid, new_uid);
+
+    ksu_uts_view_on_setresuid(old_uid, new_uid);
 
     return 0;
 }

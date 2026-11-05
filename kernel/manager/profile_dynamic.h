@@ -22,6 +22,7 @@ bool ksu_baka_dynamic_uid_authorized(uid_t uid);
 bool ksu_profile_dynamic_uid_authorized(uid_t uid);
 
 /* Shared helpers used by apk_sign.c and throne_tracker.c. */
+bool ksu_profile_dynamic_has_state(void);
 bool ksu_profile_dynamic_match(unsigned int cert_size, const char *hash);
 bool ksu_profile_dynamic_apk_match(char *path);
 void ksu_profile_dynamic_register_uid(const char *package, uid_t uid, char *apk_path);

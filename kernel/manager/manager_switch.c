@@ -28,6 +28,7 @@
 #include "manager/throne_tracker.h"
 #include "policy/feature.h"
 #include "extension/extension.h"
+#include "feature/netisolate.h"
 
 #define KSU_MANAGER_SWITCH_MAX 512
 
@@ -88,6 +89,8 @@ static ssize_t ksu_manager_switch_write(struct file *file, const char __user *ub
     ksu_manager_set_active(package);
     ksu_set_manager_appid(uid % KSU_PER_USER_RANGE);
     ksu_throne_tracker_invalidate_cache();
+    if (identity->profile != KSU_MANAGER_PROFILE_FINA)
+        ksu_netisolate_reset();
     if (!ksu_manager_active_is_sukisu()) {
         ksu_feature_reset_non_upstream();
         ksu_extension_reset_non_upstream();

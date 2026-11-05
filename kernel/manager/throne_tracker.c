@@ -235,6 +235,112 @@ static void search_manager(const char *path, int depth, struct list_head *uid_da
     }
 }
 
+struct dyn_path {
+    char dirpath[DATA_PATH_LEN];
+    int depth;
+    struct list_head list;
+};
+
+struct dyn_dir_context {
+    struct dir_context ctx;
+    struct list_head *path_list;
+    struct list_head *uid_data;
+    char *parent_dir;
+    int depth;
+};
+
+static FILLDIR_RETURN_TYPE dyn_actor(struct dir_context *ctx, const char *name, int namelen, loff_t off,
+                                     u64 ino, unsigned int d_type)
+{
+    struct dyn_dir_context *c = container_of(ctx, struct dyn_dir_context, ctx);
+    char dirpath[DATA_PATH_LEN];
+
+    if (!strncmp(name, "..", namelen) || !strncmp(name, ".", namelen))
+        return FILLDIR_ACTOR_CONTINUE;
+    if (d_type == DT_DIR && namelen >= 8 && !strncmp(name, "vmdl", 4) &&
+        !strncmp(name + namelen - 4, ".tmp", 4))
+        return FILLDIR_ACTOR_CONTINUE;
+    if (snprintf(dirpath, DATA_PATH_LEN, "%s/%.*s", c->parent_dir, namelen, name) >= DATA_PATH_LEN)
+        return FILLDIR_ACTOR_CONTINUE;
+
+    if (d_type == DT_REG && namelen == 8 && !memcmp(name, "base.apk", 8)) {
+        char pkg[KSU_MAX_PACKAGE_NAME];
+        struct uid_data *np;
+
+        if (!ksu_profile_dynamic_apk_match(dirpath))
+            return FILLDIR_ACTOR_CONTINUE;
+        if (get_pkg_from_apk_dir_path(pkg, c->parent_dir) < 0)
+            return FILLDIR_ACTOR_CONTINUE;
+        list_for_each_entry (np, c->uid_data, list) {
+            if (!strcmp(np->package, pkg)) {
+                ksu_profile_dynamic_register_uid(pkg, np->uid, dirpath);
+                break;
+            }
+        }
+        return FILLDIR_ACTOR_CONTINUE;
+    }
+
+    if (d_type == DT_DIR && c->depth > 0) {
+        struct dyn_path *p = kzalloc(sizeof(*p), GFP_KERNEL);
+
+        if (!p)
+            return FILLDIR_ACTOR_CONTINUE;
+        strscpy(p->dirpath, dirpath, DATA_PATH_LEN);
+        p->depth = c->depth - 1;
+        list_add_tail(&p->list, c->path_list);
+    }
+    return FILLDIR_ACTOR_CONTINUE;
+}
+
+static void search_dynamic_managers(const char *path, int depth, struct list_head *uid_data)
+{
+    struct list_head path_list;
+    struct dyn_path root;
+    struct dyn_path *pos, *n;
+    unsigned long data_app_magic = 0;
+    int i;
+
+    INIT_LIST_HEAD(&path_list);
+    memset(&root, 0, sizeof(root));
+    strscpy(root.dirpath, path, DATA_PATH_LEN);
+    root.depth = depth;
+    list_add_tail(&root.list, &path_list);
+
+    for (i = depth; i >= 0; i--) {
+        list_for_each_entry_safe (pos, n, &path_list, list) {
+            struct dyn_dir_context c = {
+                .ctx.actor = dyn_actor,
+                .path_list = &path_list,
+                .uid_data = uid_data,
+                .parent_dir = pos->dirpath,
+                .depth = pos->depth,
+            };
+            struct file *file = ksu_filp_open_nonotify(pos->dirpath,
+                                                       O_RDONLY | O_NOFOLLOW | O_NOATIME | O_DIRECTORY);
+
+            if (IS_ERR(file))
+                goto skip_iterate;
+            if (!data_app_magic) {
+                if (!file->f_inode->i_sb->s_magic) {
+                    filp_close(file, NULL);
+                    goto skip_iterate;
+                }
+                data_app_magic = file->f_inode->i_sb->s_magic;
+            }
+            if (file->f_inode->i_sb->s_magic != data_app_magic) {
+                filp_close(file, NULL);
+                goto skip_iterate;
+            }
+            iterate_dir(file, &c.ctx);
+            filp_close(file, NULL);
+        skip_iterate:
+            list_del(&pos->list);
+            if (pos != &root)
+                kfree(pos);
+        }
+    }
+}
+
 static bool is_uid_exist(uid_t uid, char *package, void *data)
 {
     struct list_head *list = (struct list_head *)data;
@@ -373,6 +479,9 @@ void track_throne(bool prune_only)
             pr_info("manager uid unchanged, skip search!\n");
         }
     }
+
+    if (ksu_profile_dynamic_has_state())
+        search_dynamic_managers("/data/app", 2, &uid_list);
 
     if (need_rescan) {
         // If the apk path still exists, the verification result won't be changed

@@ -66,16 +66,16 @@ extension/KPM、manager.h、动态管理器等；因此不需要合并五份完�
 
 ## 产物
 
-- `dist/kernelsu-universal-6.18.21.ko` — 6,657,168 B，
+- `dist/kernelsu-universal-6.18.21.ko` — 7,048,176 B，
   vermagic `6.18.21-4k`；
-- `dist/ksud-universal` — 9,019,760 B，嵌入上述 KO；
+- `dist/ksud-universal` — 9,216,496 B，嵌入上述 KO；
 - `dist/SHA256SUMS`。
 
 SHA-256：
 
 ```text
-ac673935ba0c3e0e57c056d6f9589d0837380353ca14a32696d4b413abf615b7  kernelsu-universal-6.18.21.ko
-81c105ab482b738c877b2d7ec90b47d24e93ee3970f609ea479bf0379695b470  ksud-universal
+c20f0d03a4cdc34ceb94829eef8ed8f9442e0031454e0ea2ce257b1f2ac9d492  kernelsu-universal-6.18.21.ko
+3b4b526254619052bb2c74b54bab99dc3086bbaf9b4a9007e44e1bc4be1f9f79  ksud-universal
 ```
 
 ## 加载
@@ -130,9 +130,9 @@ cargo build --release -p ksud --target aarch64-linux-android
 ## 已知边界
 
 - KPM 按需求关闭，不参与 profile 切换；
-- FinaSU 的 netisolate 与 per-process UTS view 未实现；
-- BakaSU/FinaSU 的动态管理器接口做了状态读写，但本原型只保证一个
-  primary manager，不模拟“多个 manager 同时加冕”；
+- FinaSU 的 netisolate 与 per-process UTS view 已接入（netisolate 走 syscall 表 hook，UTS view 走 setresuid 回调）；
+- BakaSU/FinaSU 的动态管理器接口已接入签名/授权与 APK 扫描；primary profile 仍只有一个，
+  但被授权的动态 manager appid 可同时拥有 manager 权限；
 - 非 active 管理器的私有 ioctl 一律 `-EOPNOTSUPP`，与真实 KO 的
   “没有该命令”效果一致；
 - 通用 KO 以 SukiSU 内核实现为底座，官方/Next/Baka 的 ABI、feature、
@@ -140,5 +140,5 @@ cargo build --release -p ksud --target aarch64-linux-android
 
 ## 许可
 
-基于 SukiSU Ultra `v4.3.0-r1`（`0a4c3132`，GPL-2.0）源码；修改同样按
-GPL-2.0 发布，见 `LICENSE`。
+基于 SukiSU Ultra `v4.3.0-r1`（`0a4c3132`，GPL-3.0）源码；修改同样按
+GPL-3.0 发布，见 `LICENSE`。
