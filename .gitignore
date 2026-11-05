@@ -1,0 +1,23 @@
+.DS_Store
+*.log
+
+# Compiled kernel module and kbuild output
+kernel/*.o
+kernel/**/*.o
+kernel/.*.cmd
+kernel/**/.*.cmd
+kernel/.kernelsu.*
+kernel/.module-common.o
+kernel/.modules.order.cmd
+kernel/.Module.symvers.cmd
+kernel/*.ko
+kernel/*.mod
+kernel/*.mod.c
+kernel/*.mod.o
+kernel/Module.symvers
+kernel/modules.order
+kernel/check_symbol
+
+# Packaged binaries; the App bundles these, the source repo does not
+dist/
+loader/
