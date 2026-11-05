@@ -15,8 +15,17 @@
 | SukiSU Ultra | `com.sukisu.ultra` | 41140 | 10004 | `0x35c` |
 | FinaSU | `me.yuki.fina` | 33168 | 11 | `0x2cc` |
 
-适用内核：`6.18.21-4k`（arm64，GKI 2.0）。当前在 OnePlus 16（PYB110，
-`g7fcbff`）上完成验证；同 KMI 的其他 6.18.21 设备可作为兼容目标。
+适用内核：`6.18.21-4k` / `6.12.76-4k`（arm64，GKI 2.0）。当前在 OnePlus 16
+（PYB110，`g7fcbff`）上完成 6.18 验证；6.12 使用同一套 profile 源码构建，
+目标为 Android 16 / 6.12 GKI。
+
+### 构建产物
+
+| File | Android / kernel |
+| --- | --- |
+| `ksu_universal-android16-6.12.ko` | Android 16 / 6.12 |
+| `ksu_universal-android17-6.18.ko` | Android 17 / 6.18 |
+| `ksud_universal` | 双 KMI late-load loader（内嵌上述两个 KO） |
 
 ## 功能
 
@@ -103,7 +112,7 @@ printf '%s %u %s' "$pkg" "$uid" "$apk" > /proc/kernelsu_manager
 依赖：
 
 - Linux x86_64 构建主机（或 Docker）；
-- Android 17-6.18 的 KDIR；
+- 对应 KMI 的 KDIR；
 - clang/LLVM 与 Docker；
 - 基线源码已随仓库提供，版本为 SukiSU Ultra `v4.3.0-r1`
   （commit `0a4c3132`）。
@@ -111,11 +120,17 @@ printf '%s %u %s' "$pkg" "$uid" "$apk" > /proc/kernelsu_manager
 内核模块：
 
 ```sh
-KSU_BUILD=/path/to/build scripts/build.sh
+# Android 17 / 6.18
+KSU_BUILD=/path/to/build scripts/build.sh android17-6.18
+
+# Android 16 / 6.12
+KSU_BUILD=/path/to/build scripts/build.sh android16-6.12
 ```
 
-`KSU_BUILD` 需包含 `kdir/android17-6.18`；`IMAGE` 可覆盖默认的 DDK
-镜像。构建产物为 `kernel/kernelsu.ko`，vermagic 应为 `6.18.21-4k`。
+6.18 默认使用 `$KSU_BUILD/kdir/android17-6.18`；6.12 默认使用 DDK 镜像
+内的 `/opt/ddk/kdir/android16-6.12`。可用 `KDIR` / `IMAGE` 覆盖。
+构建产物写入 `dist/`，文件名分别为
+`ksu_universal-android17-6.18.ko` 与 `ksu_universal-android16-6.12.ko`。
 
 可选的 late-load loader 不属于内核模块本身，构建方式如下（在 SukiSU
 `v4.3.0-r1` 的 `userspace/ksud` 中操作）：
@@ -157,6 +172,9 @@ cargo build --release -p ksud --target aarch64-linux-android
 - BakaSU 切换后扫描到五家管理器并注册：`me.weishu.kernelsu` index 0、
   `com.rifsxd.ksunext` index 1、`com.resukisu.resukisu` index 2、
   `com.sukisu.ultra` index 3、`me.yuki.fina` index 4。
+
+6.12 产物使用 `android16-6.12` GKI 6.12.76 KDIR 编译，尚未在 6.12.69
+设备上完成运行时回归。
 
 ## 目录结构
 
