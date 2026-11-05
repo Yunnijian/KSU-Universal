@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-KSU_BUILD="${KSU_BUILD:-/Users/tubi/ksu-build}"
+KSU_BUILD="${KSU_BUILD:-$HOME/ksu-build}"
 IMAGE="${IMAGE:-ghcr.io/ylarod/ddk-min:android17-6.18-20260828}"
 
 docker run --rm \
