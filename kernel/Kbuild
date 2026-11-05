@@ -74,6 +74,7 @@ kernelsu-objs += feature/shell_su_adb_only.o
 kernelsu-objs += feature/uts_spoof.o
 kernelsu-objs += feature/uts_view.o
 kernelsu-objs += feature/netisolate.o
+kernelsu-objs += feature/mount_view_filter.o
 kernelsu-objs += feature/avc_spoof.o
 
 ifdef KBUILD_EXTMOD

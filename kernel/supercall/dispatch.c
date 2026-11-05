@@ -83,6 +83,12 @@ static int do_get_info(void __user *arg)
 #endif
     cmd.features = ksu_manager_active_feature_max();
     cmd.uapi_version = KERNEL_SU_UAPI_VERSION;
+    if (ksu_manager_active_profile() == KSU_MANAGER_PROFILE_FINA) {
+        u32 dynamic_version;
+
+        if (ksu_fina_dynamic_version_code(current_uid().val, &dynamic_version))
+            cmd.version = dynamic_version;
+    }
     if (ksu_manager_active_is_sukisu())
         ksu_version_spoof_apply_info(&cmd);
 
@@ -115,6 +121,12 @@ static int do_get_info_legacy(void __user *arg)
     cmd.flags |= KSU_GET_INFO_FLAG_PR_BUILD;
 #endif
     cmd.features = ksu_manager_active_feature_max();
+    if (ksu_manager_active_profile() == KSU_MANAGER_PROFILE_FINA) {
+        u32 dynamic_version;
+
+        if (ksu_fina_dynamic_version_code(current_uid().val, &dynamic_version))
+            cmd.version = dynamic_version;
+    }
 
     if (ksu_manager_active_is_sukisu())
         ksu_version_spoof_apply_info_legacy(&cmd);
@@ -850,26 +862,32 @@ static int do_baka_dynamic_manager(void __user *arg)
 static int do_baka_get_managers(void __user *arg)
 {
     struct ksu_baka_get_managers_cmd cmd;
-    struct ksu_baka_manager_entry entries[KSU_MAX_DYNAMIC_MANAGERS + 1];
-    u32 appids[KSU_MAX_DYNAMIC_MANAGERS];
-    u32 total = 0;
+    struct ksu_baka_manager_record records[KSU_BAKA_MAX_MANAGERS + 1];
+    struct ksu_baka_manager_entry entry;
+    u32 total;
     u32 appid;
     u16 capacity;
     u16 copy_count;
     u32 i;
+    bool active_present = false;
 
     if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_BAKA)
         return -EOPNOTSUPP;
     if (copy_from_user(&cmd, arg, sizeof(cmd)))
         return -EFAULT;
 
+    total = ksu_baka_get_managers(records, KSU_BAKA_MAX_MANAGERS);
     appid = ksu_get_manager_appid();
-    if (appid != KSU_INVALID_APPID) {
-        entries[total].uid = appid;
-        entries[total].signature_index = 0;
+    for (i = 0; i < total; i++) {
+        if (records[i].appid == appid)
+            active_present = true;
+    }
+    if (!active_present && appid != KSU_INVALID_APPID && total < ARRAY_SIZE(records)) {
+        records[total].appid = appid;
+        records[total].signature_index =
+            (u8)ksu_manager_signature_index_for_package(ksu_manager_get_active());
         total++;
     }
-    total += ksu_baka_dynamic_get_appids(appids, ARRAY_SIZE(appids));
 
     capacity = cmd.count;
     copy_count = min_t(u16, capacity, total);
@@ -878,8 +896,10 @@ static int do_baka_get_managers(void __user *arg)
     if (copy_to_user(arg, &cmd, sizeof(cmd)))
         return -EFAULT;
     for (i = 0; i < copy_count; i++) {
-        if (copy_to_user((char __user *)arg + sizeof(cmd) + i * sizeof(entries[0]),
-                         &entries[i], sizeof(entries[0])))
+        entry.uid = records[i].appid;
+        entry.signature_index = records[i].signature_index;
+        if (copy_to_user((char __user *)arg + sizeof(cmd) + i * sizeof(entry),
+                         &entry, sizeof(entry)))
             return -EFAULT;
     }
     return 0;
@@ -1101,16 +1121,56 @@ static int do_fina_clear_netisolate_events(void __user *arg)
 static int do_fina_get_try_umount(void __user *arg)
 {
     struct ksu_fina_get_try_umount_cmd cmd;
+    struct ksu_fina_try_umount_entry *entries;
+    struct mount_entry *entry;
+    unsigned int count = 0;
+    __u32 input_size;
+    size_t required;
+    int ret = 0;
 
     if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
         return -EOPNOTSUPP;
     if (copy_from_user(&cmd, arg, sizeof(cmd)))
         return -EFAULT;
-    cmd.size = 0;
-    cmd.count = 0;
-    if (copy_to_user(arg, &cmd, sizeof(cmd)))
-        return -EFAULT;
-    return 0;
+
+    input_size = cmd.size;
+    entries = kvzalloc((size_t)KSU_FINA_TRY_UMOUNT_MAX_ENTRIES * sizeof(*entries), GFP_KERNEL);
+    if (!entries)
+        return -ENOMEM;
+
+    down_read(&mount_list_lock);
+    list_for_each_entry (entry, &mount_list, list) {
+        size_t len;
+
+        if (count >= KSU_FINA_TRY_UMOUNT_MAX_ENTRIES)
+            break;
+        if (!entry->umountable)
+            continue;
+        len = strlen(entry->umountable);
+        if (len >= KSU_FINA_TRY_UMOUNT_PATH_MAX)
+            continue;
+        memcpy(entries[count].path, entry->umountable, len + 1);
+        entries[count].flags = entry->flags;
+        count++;
+    }
+    up_read(&mount_list_lock);
+
+    required = (size_t)count * sizeof(*entries);
+    cmd.size = (__u32)required;
+    cmd.count = count;
+    if (input_size < required) {
+        ret = -ENOSPC;
+    } else if (required && !cmd.entries) {
+        ret = -EFAULT;
+    } else if (required &&
+               copy_to_user((void __user *)(unsigned long)cmd.entries, entries, required)) {
+        ret = -EFAULT;
+    }
+    if (copy_to_user(arg, &cmd, sizeof(cmd)) && !ret)
+        ret = -EFAULT;
+
+    kvfree(entries);
+    return ret;
 }
 
 static int do_profile_unsupported(void __user *arg)

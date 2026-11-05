@@ -33,6 +33,7 @@ struct fina_sign {
 
 struct fina_app {
     u32 appid;
+    u32 version_code;
     u32 flags;
 };
 
@@ -45,11 +46,12 @@ static u32 fina_sign_count;
 static struct fina_app fina_apps[FINA_MAX_APPS];
 static u32 fina_app_count;
 static bool fina_dynamic_enabled = true;
+static bool fina_grants_strict;
 static u32 baka_size;
 static char baka_hash[65];
 static bool baka_set;
-static u32 baka_appids[BAKA_MAX_APPS];
-static u32 baka_app_count;
+static struct ksu_baka_manager_record baka_managers[BAKA_MAX_APPS];
+static u32 baka_manager_count;
 
 static bool hash_valid(const char *hash)
 {
@@ -75,17 +77,20 @@ static struct fina_app *fina_find_app_locked(u32 appid)
     return NULL;
 }
 
-static void fina_add_app_locked(u32 appid, u32 flags)
+static void fina_add_app_locked(u32 appid, u32 version_code, u32 flags)
 {
     struct fina_app *app = fina_find_app_locked(appid);
 
     if (app) {
         app->flags |= flags;
+        if (version_code)
+            app->version_code = version_code;
         return;
     }
     if (fina_app_count == FINA_MAX_APPS)
         return;
     fina_apps[fina_app_count].appid = appid;
+    fina_apps[fina_app_count].version_code = version_code;
     fina_apps[fina_app_count].flags = flags;
     fina_app_count++;
 }
@@ -116,13 +121,17 @@ int ksu_fina_dynamic_set_signs(const struct ksu_fina_dynamic_manager_sign *signs
     fina_sign_count = count;
     if (count)
         memcpy(fina_signs, signs, count * sizeof(*signs));
+    for (i = 0; i < fina_app_count; i++) {
+        fina_apps[i].flags &= ~FINA_APP_TRUSTED;
+        fina_apps[i].version_code = 0;
+    }
     mutex_unlock(&profile_dynamic_lock);
     return 0;
 }
 
 u32 ksu_fina_dynamic_get_apps(void __user *apps, u32 capacity, u32 *total)
 {
-    u32 count;
+    u32 count = 0;
     u32 i;
     struct ksu_fina_dynamic_manager_app {
         u32 appid;
@@ -130,18 +139,22 @@ u32 ksu_fina_dynamic_get_apps(void __user *apps, u32 capacity, u32 *total)
     } entry;
 
     mutex_lock(&profile_dynamic_lock);
-    *total = fina_app_count;
-    count = min(capacity, fina_app_count);
-    for (i = 0; i < count; i++) {
-        entry.appid = fina_apps[i].appid;
-        entry.flags = fina_apps[i].flags;
-        if (copy_to_user((char __user *)apps + i * sizeof(entry), &entry, sizeof(entry))) {
-            mutex_unlock(&profile_dynamic_lock);
-            return 0;
+    for (i = 0; i < fina_app_count; i++) {
+        if (!fina_apps[i].flags)
+            continue;
+        if (count < capacity) {
+            entry.appid = fina_apps[i].appid;
+            entry.flags = fina_apps[i].flags;
+            if (copy_to_user((char __user *)apps + count * sizeof(entry), &entry, sizeof(entry))) {
+                mutex_unlock(&profile_dynamic_lock);
+                return count;
+            }
         }
+        count++;
     }
+    *total = count;
     mutex_unlock(&profile_dynamic_lock);
-    return count;
+    return min(capacity, count);
 }
 
 int ksu_fina_dynamic_set_grants(const __u32 *appids, u32 count)
@@ -155,7 +168,8 @@ int ksu_fina_dynamic_set_grants(const __u32 *appids, u32 count)
     for (i = 0; i < fina_app_count; i++)
         fina_apps[i].flags &= ~FINA_APP_GRANTED;
     for (i = 0; i < count; i++)
-        fina_add_app_locked(appids[i], FINA_APP_TRUSTED | FINA_APP_GRANTED);
+        fina_add_app_locked(appids[i], 0, FINA_APP_GRANTED);
+    fina_grants_strict = true;
     mutex_unlock(&profile_dynamic_lock);
     return 0;
 }
@@ -170,7 +184,9 @@ bool ksu_fina_dynamic_uid_authorized(uid_t uid)
         return false;
     mutex_lock(&profile_dynamic_lock);
     for (i = 0; i < fina_app_count; i++) {
-        if (fina_apps[i].appid == appid && (fina_apps[i].flags & FINA_APP_GRANTED)) {
+        if (fina_apps[i].appid == appid &&
+            (fina_apps[i].flags & FINA_APP_TRUSTED) &&
+            ((fina_apps[i].flags & FINA_APP_GRANTED) || !fina_grants_strict)) {
             found = true;
             break;
         }
@@ -208,27 +224,54 @@ int ksu_baka_dynamic_set(u32 size, const char *hash)
 
 void ksu_baka_dynamic_wipe(void)
 {
+    u32 i, out = 0;
+
     mutex_lock(&profile_dynamic_lock);
     baka_size = 0;
     baka_hash[0] = '\0';
     baka_set = false;
-    baka_app_count = 0;
+    for (i = 0; i < baka_manager_count; i++) {
+        if (baka_managers[i].signature_index != 255)
+            baka_managers[out++] = baka_managers[i];
+    }
+    baka_manager_count = out;
     mutex_unlock(&profile_dynamic_lock);
 }
 
-u32 ksu_baka_dynamic_get_appids(u32 *appids, u32 capacity)
+void ksu_baka_register_manager(u32 appid, u8 signature_index)
+{
+    u32 i;
+
+    mutex_lock(&profile_dynamic_lock);
+    for (i = 0; i < baka_manager_count; i++) {
+        if (baka_managers[i].appid == appid) {
+            baka_managers[i].signature_index = signature_index;
+            mutex_unlock(&profile_dynamic_lock);
+            return;
+        }
+    }
+    if (baka_manager_count < BAKA_MAX_APPS) {
+        baka_managers[baka_manager_count].appid = appid;
+        baka_managers[baka_manager_count].signature_index = signature_index;
+        baka_manager_count++;
+    }
+    mutex_unlock(&profile_dynamic_lock);
+}
+
+u32 ksu_baka_get_managers(struct ksu_baka_manager_record *records, u32 capacity)
 {
     u32 count;
 
     mutex_lock(&profile_dynamic_lock);
-    count = min(capacity, baka_app_count);
+    count = min(capacity, baka_manager_count);
     if (count)
-        memcpy(appids, baka_appids, count * sizeof(*appids));
+        memcpy(records, baka_managers, count * sizeof(*records));
     mutex_unlock(&profile_dynamic_lock);
     return count;
 }
 
-bool ksu_baka_dynamic_uid_authorized(uid_t uid){
+bool ksu_baka_dynamic_uid_authorized(uid_t uid)
+{
     u32 appid = uid % KSU_PER_USER_RANGE;
     u32 i;
     bool found = false;
@@ -236,8 +279,30 @@ bool ksu_baka_dynamic_uid_authorized(uid_t uid){
     if (ksu_manager_active_profile() != KSU_MANAGER_PROFILE_BAKA)
         return false;
     mutex_lock(&profile_dynamic_lock);
-    for (i = 0; i < baka_app_count; i++) {
-        if (baka_appids[i] == appid) {
+    for (i = 0; i < baka_manager_count; i++) {
+        if (baka_managers[i].appid == appid) {
+            found = true;
+            break;
+        }
+    }
+    mutex_unlock(&profile_dynamic_lock);
+    return found;
+}
+
+bool ksu_fina_dynamic_version_code(uid_t uid, u32 *version)
+{
+    u32 appid = uid % KSU_PER_USER_RANGE;
+    u32 i;
+    bool found = false;
+
+    if (!version || ksu_manager_active_profile() != KSU_MANAGER_PROFILE_FINA)
+        return false;
+    mutex_lock(&profile_dynamic_lock);
+    for (i = 0; i < fina_app_count; i++) {
+        if (fina_apps[i].appid == appid &&
+            (fina_apps[i].flags & FINA_APP_TRUSTED) &&
+            fina_apps[i].version_code) {
+            *version = fina_apps[i].version_code;
             found = true;
             break;
         }
@@ -304,6 +369,24 @@ bool ksu_profile_dynamic_match(unsigned int cert_size, const char *hash)
     }
 }
 
+static bool fina_dynamic_apk_version(char *path, u32 *version)
+{
+    unsigned int i;
+
+    if (!version)
+        return false;
+    mutex_lock(&profile_dynamic_lock);
+    for (i = 0; i < fina_sign_count; i++) {
+        if (ksu_check_apk_signature(path, fina_signs[i].size, fina_signs[i].hash)) {
+            *version = fina_signs[i].version_code;
+            mutex_unlock(&profile_dynamic_lock);
+            return true;
+        }
+    }
+    mutex_unlock(&profile_dynamic_lock);
+    return false;
+}
+
 bool ksu_profile_dynamic_apk_match(char *path)
 {
     unsigned int i;
@@ -342,23 +425,14 @@ void ksu_profile_dynamic_register_uid(const char *package, uid_t uid, char *apk_
         return;
 
     if (ksu_manager_active_profile() == KSU_MANAGER_PROFILE_FINA) {
+        u32 version = 0;
+
+        fina_dynamic_apk_version(apk_path, &version);
         mutex_lock(&profile_dynamic_lock);
-        fina_add_app_locked(uid % KSU_PER_USER_RANGE, FINA_APP_TRUSTED | FINA_APP_GRANTED);
+        fina_add_app_locked(uid % KSU_PER_USER_RANGE, version, FINA_APP_TRUSTED);
         mutex_unlock(&profile_dynamic_lock);
     } else if (ksu_manager_active_profile() == KSU_MANAGER_PROFILE_BAKA) {
-        u32 appid = uid % KSU_PER_USER_RANGE;
-        u32 i;
-
-        mutex_lock(&profile_dynamic_lock);
-        for (i = 0; i < baka_app_count; i++) {
-            if (baka_appids[i] == appid) {
-                mutex_unlock(&profile_dynamic_lock);
-                return;
-            }
-        }
-        if (baka_app_count < BAKA_MAX_APPS)
-            baka_appids[baka_app_count++] = appid;
-        mutex_unlock(&profile_dynamic_lock);
+        ksu_baka_register_manager(uid % KSU_PER_USER_RANGE, 255);
     }
 }
 
@@ -370,9 +444,10 @@ void ksu_profile_dynamic_reset(void)
     memset(fina_apps, 0, sizeof(fina_apps));
     fina_app_count = 0;
     fina_dynamic_enabled = true;
+    fina_grants_strict = false;
     baka_size = 0;
     baka_hash[0] = '\0';
     baka_set = false;
-    baka_app_count = 0;
+    baka_manager_count = 0;
     mutex_unlock(&profile_dynamic_lock);
 }

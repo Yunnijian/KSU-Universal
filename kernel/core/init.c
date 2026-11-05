@@ -31,6 +31,7 @@
 #include "feature/uts_spoof.h"
 #include "feature/uts_view.h"
 #include "feature/netisolate.h"
+#include "feature/mount_view_filter.h"
 #include "feature/shell_su_adb_only.h"
 #include "feature/module_blacklist.h"
 #include "infra/symbol_resolver.h"
@@ -183,6 +184,7 @@ int __init kernelsu_init(void)
         pr_info("uts_view: feature unavailable\n");
     if (ksu_netisolate_init())
         pr_info("netisolate: feature unavailable\n");
+    ksu_mvf_init();
 
     if (ksu_late_loaded) {
         pr_info("late load mode, skipping kprobe hooks\n");
@@ -271,6 +273,7 @@ void __exit kernelsu_exit(void)
     ksu_lsm_hook_exit();
     ksu_adb_root_exit();
     ksu_sulog_exit();
+    ksu_mvf_exit();
     ksu_netisolate_exit();
     ksu_uts_view_exit();
     ksu_profile_features_exit();

@@ -172,6 +172,19 @@ enum ksu_manager_profile ksu_manager_active_profile(void)
     return ksu_manager_active_identity()->profile;
 }
 
+int ksu_manager_signature_index_for_package(const char *package)
+{
+    int i;
+
+    if (!package || !*package)
+        return -1;
+    for (i = 0; i < ARRAY_SIZE(ksu_manager_identities); i++) {
+        if (!strcmp(package, ksu_manager_identities[i].package))
+            return i;
+    }
+    return -1;
+}
+
 const char *ksu_manager_profile_name(enum ksu_manager_profile profile)
 {
     switch (profile) {

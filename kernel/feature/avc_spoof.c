@@ -7,6 +7,7 @@
 
 #include "policy/feature.h"
 #include "feature/avc_spoof.h"
+#include "manager/manager_table.h"
 #include "klog.h"
 #include "runtime/ksud_boot.h"
 
@@ -51,7 +52,18 @@ static int slow_avc_audit_pre_handler(struct kprobe *p, struct pt_regs *regs)
     tsid = (u32 *)&PT_REGS_PARM3(regs);
 #endif
 
-    if (*tsid == su_sid || *tsid == ksu_sid) {
+    /*
+     * Each fork covers a different audit source:
+     *   SukiSU: su + ksu contexts
+     *   Next:   su context only
+     *   FinaSU: ksu context only
+     */
+    if ((*tsid == su_sid &&
+         (ksu_manager_active_profile() == KSU_MANAGER_PROFILE_SUKISU ||
+          ksu_manager_active_profile() == KSU_MANAGER_PROFILE_NEXT)) ||
+        (*tsid == ksu_sid &&
+         (ksu_manager_active_profile() == KSU_MANAGER_PROFILE_SUKISU ||
+          ksu_manager_active_profile() == KSU_MANAGER_PROFILE_FINA))) {
         pr_info_ratelimited("avc_spoof: replace tsid %u with %u\n", *tsid, priv_app_sid);
         *tsid = priv_app_sid;
     }

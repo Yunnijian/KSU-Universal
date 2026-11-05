@@ -39,6 +39,8 @@ struct ksu_baka_kernel_patch_cmd {
     __u8 type;
 };
 
+#define KSU_BAKA_MAX_MANAGERS 64
+
 #define KSU_IOCTL_BAKA_DYNAMIC_MANAGER _IOC(_IOC_READ | _IOC_WRITE, 'K', 103, 0)
 #define KSU_IOCTL_BAKA_GET_MANAGERS _IOC(_IOC_READ | _IOC_WRITE, 'K', 105, 0)
 #define KSU_IOCTL_BAKA_GET_KERNEL_PATCH _IOC(_IOC_READ, 'K', 106, 0)
@@ -90,6 +92,15 @@ struct ksu_fina_uts_view_config {
     char domainname[65];
     __u32 target_count;
     __u32 target_uids[128];
+};
+
+#define KSU_FINA_TRY_UMOUNT_PATH_MAX 256
+#define KSU_FINA_TRY_UMOUNT_MAX_ENTRIES 256
+
+struct ksu_fina_try_umount_entry {
+    char path[KSU_FINA_TRY_UMOUNT_PATH_MAX];
+    __u32 flags;
+    __u32 reserved;
 };
 
 struct ksu_fina_get_try_umount_cmd {

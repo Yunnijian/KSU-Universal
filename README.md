@@ -26,10 +26,12 @@
   manager，模块保持加载，`su` 不需要重新安装。
 - **profile 隔离**：非 active 管理器的 feature、extension 和私有 ioctl
   返回 `-EOPNOTSUPP`；SukiSU extension 只在 SukiSU profile 下可见。
-- **动态管理器**：BakaSU/FinaSU 的签名与授权接口可用；被授权的动态
-  manager appid 可获得 manager 权限，但不会改变 active profile。
+- **动态管理器**：BakaSU/FinaSU 的签名与授权接口可用；BakaSU profile
+  还会扫描并注册全部已安装静态管理器，使多个 manager appid 同时拥有
+  manager 权限；primary profile 仍只有一个。
 - **FinaSU 可选功能**：netisolate（27-32）、per-process UTS view
-  （feature 9 / ioctl 25-26）和 mount view filter 已接入。
+  （feature 9 / ioctl 25-26）、mount view filter（feature 10）和
+  `GET_TRY_UMOUNT`（33）已按 Fina 行为接入。
 - **状态查询**：`/proc/kernelsu_manager` 可由 root 读取，返回当前
   profile、versionCode 和 feature_max。
 
@@ -149,7 +151,12 @@ cargo build --release -p ksud --target aarch64-linux-android
 - feature 边界符合预期：10003 只对 Next/SukiSU 开放，16 只对 SukiSU
   开放；
 - FinaSU 的 UTS view（feature 9）与 netisolate（27-32）运行时探针均
-  返回 `supported=true`，配置与状态读取正常。
+  返回 `supported=true`，配置与状态读取正常；
+- FinaSU mount view filter（feature 10）可 set 1 / get 1 / set 0；
+- FinaSU `GET_TRY_UMOUNT` 实测 add → list 返回条目 → del → list 为空；
+- BakaSU 切换后扫描到五家管理器并注册：`me.weishu.kernelsu` index 0、
+  `com.rifsxd.ksunext` index 1、`com.resukisu.resukisu` index 2、
+  `com.sukisu.ultra` index 3、`me.yuki.fina` index 4。
 
 ## 目录结构
 
@@ -164,8 +171,9 @@ dist/          打包产物（不提交到源码仓库）
 ## 已知边界
 
 - KPM 关闭；不参与 profile 切换。
-- 同一时间只有一个 primary profile；动态 manager 可以追加 manager 权限，
-  但不会切换版本/feature 表面。
+- 同一时间只有一个 primary profile；BakaSU 下可有多个 manager appid
+  同时拥有 manager 权限，FinaSU 的动态 manager 通过签名 + grant 授权；
+  它们都不会切换 active profile 的版本/feature 表面。
 - 官方/Next/Baka 的 ABI、feature、extension 和授权面已隔离，但模块以
   SukiSU 内核实现为底座，不复制三家各自的内核私有行为。
 - 通用 KO 与 stock KSU 同名同 hook，必须在无 KSU 已加载的干净 boot

@@ -87,7 +87,7 @@ static bool translate_feature_id(u32 manager_id, u32 *internal_id)
         *internal_id = KSU_FEATURE_FINA_UTS_VIEW_HANDLER;
         return true;
     case KSU_FEATURE_FINA_MOUNT_VIEW_FILTER:
-        *internal_id = KSU_FEATURE_MOUNT_HIDE;
+        *internal_id = KSU_FEATURE_FINA_MOUNT_VIEW_FILTER_HANDLER;
         return true;
     default:
         return false;
@@ -333,6 +333,7 @@ void ksu_feature_reset_non_upstream(void)
         KSU_FEATURE_FINA_DYNAMIC_MANAGER_HANDLER,
         KSU_FEATURE_FINA_DYNAMIC_MANAGER_GRANTS_HANDLER,
         KSU_FEATURE_FINA_UTS_VIEW_HANDLER,
+        KSU_FEATURE_FINA_MOUNT_VIEW_FILTER_HANDLER,
     };
     const struct ksu_feature_handler *handler;
     unsigned int i;

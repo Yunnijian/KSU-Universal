@@ -11,11 +11,18 @@ int ksu_fina_dynamic_set_signs(const struct ksu_fina_dynamic_manager_sign *signs
 u32 ksu_fina_dynamic_get_apps(void __user *apps, u32 capacity, u32 *total);
 int ksu_fina_dynamic_set_grants(const __u32 *appids, u32 count);
 bool ksu_fina_dynamic_uid_authorized(uid_t uid);
+bool ksu_fina_dynamic_version_code(uid_t uid, u32 *version);
+
+struct ksu_baka_manager_record {
+    u32 appid;
+    u8 signature_index;
+};
 
 bool ksu_baka_dynamic_get(u32 *size, char hash[65]);
 int ksu_baka_dynamic_set(u32 size, const char *hash);
 void ksu_baka_dynamic_wipe(void);
-u32 ksu_baka_dynamic_get_appids(u32 *appids, u32 capacity);
+void ksu_baka_register_manager(u32 appid, u8 signature_index);
+u32 ksu_baka_get_managers(struct ksu_baka_manager_record *records, u32 capacity);
 bool ksu_baka_dynamic_uid_authorized(uid_t uid);
 
 /* Profile-dispatched check used by the manager authorization paths. */

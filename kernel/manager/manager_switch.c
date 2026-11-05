@@ -95,6 +95,8 @@ static ssize_t ksu_manager_switch_write(struct file *file, const char __user *ub
         ksu_feature_reset_non_upstream();
         ksu_extension_reset_non_upstream();
     }
+    if (identity->profile == KSU_MANAGER_PROFILE_BAKA)
+        track_throne(false);
     pr_info("manager switch: primary=%s (%s) uid=%u\n", package,
             ksu_manager_profile_name(identity->profile), uid);
     return count;

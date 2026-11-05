@@ -42,5 +42,6 @@ __u32 ksu_manager_active_feature_max(void);
 bool ksu_manager_active_is_sukisu(void);
 enum ksu_manager_profile ksu_manager_active_profile(void);
 const char *ksu_manager_profile_name(enum ksu_manager_profile profile);
+int ksu_manager_signature_index_for_package(const char *package);
 
 #endif /* __KSU_H_MANAGER_TABLE */
