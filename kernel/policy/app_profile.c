@@ -14,6 +14,7 @@
 #include <linux/tty.h>
 #include "objsec.h"
 
+#include "manager/manager_table.h"
 #include "policy/allowlist.h"
 #include "policy/app_profile.h"
 #include "klog.h" // IWYU pragma: keep
@@ -193,7 +194,17 @@ int escape_with_root_profile(void)
     }
 #endif
 
-    memcpy(&cred->cap_effective, &profile->capabilities.effective, sizeof(cred->cap_effective));
+    /*
+     * BakaSU grants CAP_DAC_READ_SEARCH so its manager can reach
+     * /data/adb/ksud; keep the default profiles unchanged.
+     */
+    if (ksu_manager_active_profile() == KSU_MANAGER_PROFILE_BAKA) {
+        u64 effective = profile->capabilities.effective | CAP_TO_MASK(CAP_DAC_READ_SEARCH);
+
+        memcpy(&cred->cap_effective, &effective, sizeof(cred->cap_effective));
+    } else {
+        memcpy(&cred->cap_effective, &profile->capabilities.effective, sizeof(cred->cap_effective));
+    }
     memcpy(&cred->cap_permitted, &profile->capabilities.effective, sizeof(cred->cap_permitted));
     memcpy(&cred->cap_bset, &profile->capabilities.effective, sizeof(cred->cap_bset));
     if (profile->uid != 0) {
