@@ -204,9 +204,10 @@ cargo build --release -p ksud --target aarch64-linux-android
   - Fina 激活时从 `/data/adb/ksu/dynamic_manager` 载入 1 个签名，
     切走再切回后文件内容与备份逐字节一致。
 - 仍待运行时验证：Baka `block_modules`/Fina `vivo_module_filter` 的命中
-  模块路径（需要带模块参数重新加载）、Baka umount 的实际挂载场景，以及
-  6.12.69 / V2505A 设备回归。真机验证使用的是 `/data/local/tmp` 临时
-  loader；发布 App 前需要把新 KO 重新嵌入正式 loader。
+  模块路径（需要带模块参数重新加载；本次带参数复测触发过一次 98260 竞态
+  重启，未取得命中日志）、Baka umount 的实际挂载场景，以及 6.12.69 /
+  V2505A 设备回归。真机验证使用的是 `/data/local/tmp` 临时 loader；发布
+  App 前需要把新 KO 重新嵌入正式 loader。
 
 ## 目录结构
 
