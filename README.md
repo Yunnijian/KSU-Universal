@@ -193,10 +193,20 @@ cargo build --release -p ksud --target aarch64-linux-android
 - 6.18 / 6.12 双 KMI 均已重新编译通过：
   - `ksu_universal-android17-6.18.ko`，vermagic `6.18.21-4k`；
   - `ksu_universal-android16-6.12.ko`，vermagic `6.12.76-4k`。
-- 新增的 profile ops、Baka setuid/ksud 保护/umount、Baka module filter、
-  Fina module filter 和 Fina 动态管理器持久化，尚待在 PYB110 / 6.12.69 /
-  V2505A 真机上做逐项切换回归；在此之前按“代码与构建已验证”看待，不当作
-  运行时已验证。
+- 在 PYB110（6.18.21 `g7fcbff`）上用内嵌新 KO 的临时 loader 完成干净
+  boot late-load，并执行五家切换回归：
+  - 五次切换 `rc=0`，`/proc/kernelsu_manager` 分别返回
+    KernelSU 32707/7、Next 33442/10004、BakaSU 35257/7、
+    SukiSU 41140/10004、FinaSU 33168/11；
+  - 每次切换后 `su -c id` 均为 `uid=0(root)`、`u:r:ksu:s0`；
+  - Baka 启动管理器时日志出现 `baka: install fd for manager` 和
+    `baka: mark /data/adb/ksud read write`；
+  - Fina 激活时从 `/data/adb/ksu/dynamic_manager` 载入 1 个签名，
+    切走再切回后文件内容与备份逐字节一致。
+- 仍待运行时验证：Baka `block_modules`/Fina `vivo_module_filter` 的命中
+  模块路径（需要带模块参数重新加载）、Baka umount 的实际挂载场景，以及
+  6.12.69 / V2505A 设备回归。真机验证使用的是 `/data/local/tmp` 临时
+  loader；发布 App 前需要把新 KO 重新嵌入正式 loader。
 
 ## 目录结构
 

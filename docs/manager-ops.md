@@ -101,13 +101,22 @@ Static/build evidence:
 - 6.18: `ksu_universal-android17-6.18.ko`, vermagic `6.18.21-4k`.
 - 6.12: `ksu_universal-android16-6.12.ko`, vermagic `6.12.76-4k`.
 
-Device regression still needs to cover:
+Device evidence on PYB110 (6.18.21 `g7fcbff`):
 
-1. five-profile switch loop and `su -c id`;
-2. BakaSU: ksud immutable state, `block_modules` behavior, Baka umount;
-3. FinaSU: vivo filter, dynamic-manager file load/save across reboot;
-4. FinaSU netisolate/UTS view/mount_view_filter regression;
-5. 6.12.69 and V2505A runtime checks.
+- clean-boot late-load of the new KO through a temporary loader;
+- five-profile switch loop: all `rc=0`, state strings matched the profile
+  table, and `su -c id` stayed `uid=0(root)` / `u:r:ksu:s0`;
+- BakaSU logs showed `baka: install fd for manager` and
+  `baka: mark /data/adb/ksud read write`;
+- FinaSU loaded 1 signature from `/data/adb/ksu/dynamic_manager`; switching
+  away and back preserved the file byte-for-byte.
 
-Until those are run, this document records build-level and code-level
-verification only.
+Still pending:
+
+1. `block_modules` / `vivo_module_filter` hit paths (need a reload with
+   module parameters);
+2. Baka umount with an actually mounted module;
+3. FinaSU netisolate/UTS view/mount_view_filter regression on the new ops;
+4. 6.12.69 and V2505A runtime checks;
+5. rebuilding the production App loader with the new KO (the device test
+   used `/data/local/tmp/ksud-new`).
