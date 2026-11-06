@@ -22,8 +22,9 @@
 #include "feature/kernel_umount.h"
 #include "feature/mount_hide.h"
 #include "feature/uts_view.h"
+#include "manager/manager_ops.h"
 
-int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
+int ksu_setuid_default(uid_t old_uid, uid_t new_uid)
 {
     // we rely on the fact that zygote always call setresuid(3) with same uids
 
@@ -55,6 +56,16 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
     ksu_uts_view_on_setresuid(old_uid, new_uid);
 
     return 0;
+}
+
+int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
+{
+    const struct ksu_manager_ops *ops = ksu_manager_ops_current();
+
+    if (ops && ops->setuid)
+        return ops->setuid(old_uid, new_uid);
+
+    return ksu_setuid_default(old_uid, new_uid);
 }
 
 void __init ksu_setuid_hook_init(void)

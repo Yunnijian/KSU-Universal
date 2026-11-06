@@ -23,6 +23,7 @@
 #include "klog.h" // IWYU pragma: keep
 #include "manager/apk_sign.h"
 #include "manager/manager_identity.h"
+#include "manager/manager_ops.h"
 #include "manager/manager_switch.h"
 #include "manager/manager_table.h"
 #include "manager/throne_tracker.h"
@@ -87,6 +88,7 @@ static ssize_t ksu_manager_switch_write(struct file *file, const char __user *ub
         return -EKEYREJECTED;
 
     ksu_manager_set_active(package);
+    ksu_manager_ops_select(identity->profile);
     ksu_set_manager_appid(uid % KSU_PER_USER_RANGE);
     ksu_throne_tracker_invalidate_cache();
     if (identity->profile != KSU_MANAGER_PROFILE_FINA)

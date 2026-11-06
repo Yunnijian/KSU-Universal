@@ -10,4 +10,7 @@ void ksu_setuid_hook_exit(void);
 // Handler functions for hook_manager
 int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid);
 
+// Baseline SukiSU behavior used by profiles without an override.
+int ksu_setuid_default(uid_t old_uid, uid_t new_uid);
+
 #endif
