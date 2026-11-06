@@ -270,25 +270,6 @@ static FILLDIR_RETURN_TYPE dyn_actor(struct dir_context *ctx, const char *name, 
         if (get_pkg_from_apk_dir_path(pkg, c->parent_dir) < 0)
             return FILLDIR_ACTOR_CONTINUE;
 
-        if (ksu_manager_active_profile() == KSU_MANAGER_PROFILE_BAKA) {
-            const struct ksu_manager_identity *identity =
-                ksu_manager_identity_for_package(pkg);
-
-            if (identity &&
-                ksu_check_apk_signature(dirpath, identity->cert_size, identity->cert_hash)) {
-                list_for_each_entry (np, c->uid_data, list) {
-                    if (!strcmp(np->package, pkg)) {
-                        int index = ksu_manager_signature_index_for_package(pkg);
-
-                        ksu_baka_register_manager(np->uid % KSU_PER_USER_RANGE, (u8)index);
-                        pr_info("baka multi-manager: %s appid=%u index=%d\n",
-                                pkg, np->uid % KSU_PER_USER_RANGE, index);
-                        return FILLDIR_ACTOR_CONTINUE;
-                    }
-                }
-            }
-        }
-
         if (!ksu_profile_dynamic_apk_match(dirpath))
             return FILLDIR_ACTOR_CONTINUE;
         list_for_each_entry (np, c->uid_data, list) {

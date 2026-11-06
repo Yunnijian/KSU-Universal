@@ -35,9 +35,10 @@
   manager，模块保持加载，`su` 不需要重新安装。
 - **profile 隔离**：非 active 管理器的 feature、extension 和私有 ioctl
   返回 `-EOPNOTSUPP`；SukiSU extension 只在 SukiSU profile 下可见。
-- **动态管理器**：BakaSU/FinaSU 的签名与授权接口可用；BakaSU profile
-  还会扫描并注册全部已安装静态管理器，使多个 manager appid 同时拥有
-  manager 权限；primary profile 仍只有一个。
+- **动态管理器**：BakaSU/FinaSU 的签名与授权接口可用。BakaSU 只把
+  active primary 当作固定项，其他已安装管理器不预注册，由用户在 Baka
+  管理器里勾选为动态管理器（signature index 255）；primary profile
+  仍只有一个。
 - **FinaSU 可选功能**：netisolate（27-32）、per-process UTS view
   （feature 9 / ioctl 25-26）、mount view filter（feature 10）和
   `GET_TRY_UMOUNT`（33）已按 Fina 行为接入。
@@ -182,9 +183,9 @@ cargo build --release -p ksud --target aarch64-linux-android
   返回 `supported=true`，配置与状态读取正常；
 - FinaSU mount view filter（feature 10）可 set 1 / get 1 / set 0；
 - FinaSU `GET_TRY_UMOUNT` 实测 add → list 返回条目 → del → list 为空；
-- BakaSU 切换后扫描到五家管理器并注册：`me.weishu.kernelsu` index 0、
-  `com.rifsxd.ksunext` index 1、`com.resukisu.resukisu` index 2、
-  `com.sukisu.ultra` index 3、`me.yuki.fina` index 4。
+- BakaSU 只把 active primary 作为固定 manager；其他已安装管理器在
+  Baka 管理器里显示为未注册条目，由用户勾选后才以动态管理器（255）
+  注册。
 
 6.12 产物使用 `android16-6.12` GKI 6.12.76 KDIR 编译，尚未在 6.12.69
 设备上完成运行时回归。
