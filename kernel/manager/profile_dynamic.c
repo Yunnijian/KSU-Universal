@@ -10,12 +10,15 @@
  * implemented; their ioctls return -EOPNOTSUPP.
  */
 #include <linux/ctype.h>
+#include <linux/cred.h>
+#include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/mutex.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
 
 #include "klog.h" // IWYU pragma: keep
+#include "ksu.h"
 #include "manager/apk_sign.h"
 #include "manager/manager_identity.h"
 #include "manager/manager_table.h"
@@ -24,6 +27,17 @@
 #define FINA_MAX_SIGNS 64
 #define FINA_MAX_APPS 64
 #define BAKA_MAX_APPS 64
+
+#define FINA_DYNAMIC_MANAGER_FILE "/data/adb/ksu/dynamic_manager"
+#define FINA_DYNAMIC_MAGIC 0x4d554b53 /* KSUM */
+#define FINA_DYNAMIC_VERSION 2
+#define FINA_DYNAMIC_FLAG_GRANTS_STRICT (1U << 0)
+
+struct fina_disk_sign {
+    u32 size;
+    u32 version_code;
+    char hash[65];
+};
 
 struct fina_sign {
     u32 size;
@@ -105,6 +119,138 @@ void ksu_fina_dynamic_set_enabled(bool enabled)
     WRITE_ONCE(fina_dynamic_enabled, enabled);
 }
 
+static void ksu_fina_dynamic_save_locked(struct file *fp)
+{
+    struct fina_disk_sign disk;
+    loff_t off = 0;
+    u32 magic = FINA_DYNAMIC_MAGIC;
+    u32 version = FINA_DYNAMIC_VERSION;
+    u32 flags = 0;
+    u32 grant_count = 0;
+    u32 i;
+
+    if (fina_grants_strict)
+        flags |= FINA_DYNAMIC_FLAG_GRANTS_STRICT;
+
+    for (i = 0; i < fina_app_count; i++) {
+        if (fina_apps[i].flags & FINA_APP_GRANTED)
+            grant_count++;
+    }
+
+    if (kernel_write(fp, &magic, sizeof(magic), &off) != sizeof(magic) ||
+        kernel_write(fp, &version, sizeof(version), &off) != sizeof(version) ||
+        kernel_write(fp, &flags, sizeof(flags), &off) != sizeof(flags) ||
+        kernel_write(fp, &grant_count, sizeof(grant_count), &off) != sizeof(grant_count))
+        return;
+
+    for (i = 0; i < fina_app_count; i++) {
+        u32 appid;
+
+        if (!(fina_apps[i].flags & FINA_APP_GRANTED))
+            continue;
+        appid = fina_apps[i].appid;
+        if (kernel_write(fp, &appid, sizeof(appid), &off) != sizeof(appid))
+            return;
+    }
+
+    for (i = 0; i < fina_sign_count; i++) {
+        memset(&disk, 0, sizeof(disk));
+        disk.size = fina_signs[i].size;
+        disk.version_code = fina_signs[i].version_code;
+        strscpy(disk.hash, fina_signs[i].hash, sizeof(disk.hash));
+        if (kernel_write(fp, &disk, sizeof(disk), &off) != sizeof(disk))
+            return;
+    }
+}
+
+void ksu_fina_dynamic_save(void)
+{
+    const struct cred *saved;
+    struct file *fp;
+
+    saved = override_creds(ksu_cred);
+    fp = filp_open(FINA_DYNAMIC_MANAGER_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (IS_ERR(fp)) {
+        pr_err("dynamic_manager: create file failed: %ld\n", PTR_ERR(fp));
+        revert_creds(saved);
+        return;
+    }
+
+    mutex_lock(&profile_dynamic_lock);
+    ksu_fina_dynamic_save_locked(fp);
+    mutex_unlock(&profile_dynamic_lock);
+
+    filp_close(fp, NULL);
+    revert_creds(saved);
+}
+
+void ksu_fina_dynamic_load(void)
+{
+    const struct cred *saved;
+    struct file *fp;
+    struct fina_disk_sign disk;
+    u32 grants[FINA_MAX_APPS];
+    u32 magic, version, flags = 0, grant_count = 0;
+    loff_t off = 0;
+    u32 i;
+
+    saved = override_creds(ksu_cred);
+    fp = filp_open(FINA_DYNAMIC_MANAGER_FILE, O_RDONLY, 0);
+    if (IS_ERR(fp)) {
+        pr_info("dynamic_manager: no persisted list: %ld\n", PTR_ERR(fp));
+        revert_creds(saved);
+        return;
+    }
+
+    if (kernel_read(fp, &magic, sizeof(magic), &off) != sizeof(magic) ||
+        magic != FINA_DYNAMIC_MAGIC ||
+        kernel_read(fp, &version, sizeof(version), &off) != sizeof(version) ||
+        (version != 1 && version != FINA_DYNAMIC_VERSION))
+        goto out;
+
+    if (version >= 2) {
+        if (kernel_read(fp, &flags, sizeof(flags), &off) != sizeof(flags) ||
+            kernel_read(fp, &grant_count, sizeof(grant_count), &off) != sizeof(grant_count) ||
+            grant_count > FINA_MAX_APPS)
+            goto out;
+
+        for (i = 0; i < grant_count; i++) {
+            if (kernel_read(fp, &grants[i], sizeof(grants[i]), &off) != sizeof(grants[i]) ||
+                grants[i] >= KSU_PER_USER_RANGE)
+                goto out;
+        }
+    }
+
+    mutex_lock(&profile_dynamic_lock);
+    memset(fina_signs, 0, sizeof(fina_signs));
+    fina_sign_count = 0;
+    memset(fina_apps, 0, sizeof(fina_apps));
+    fina_app_count = 0;
+    fina_grants_strict = (flags & FINA_DYNAMIC_FLAG_GRANTS_STRICT) != 0;
+
+    for (i = 0; i < grant_count; i++)
+        fina_add_app_locked(grants[i], 0, FINA_APP_GRANTED);
+
+    while (fina_sign_count < FINA_MAX_SIGNS &&
+           kernel_read(fp, &disk, sizeof(disk), &off) == sizeof(disk)) {
+        if (!disk.size || !hash_valid(disk.hash))
+            continue;
+        fina_signs[fina_sign_count].size = disk.size;
+        fina_signs[fina_sign_count].version_code = disk.version_code;
+        strscpy(fina_signs[fina_sign_count].hash, disk.hash,
+                sizeof(fina_signs[fina_sign_count].hash));
+        fina_sign_count++;
+    }
+    mutex_unlock(&profile_dynamic_lock);
+
+    pr_info("dynamic_manager: loaded %u signatures, %u grants\n",
+            fina_sign_count, grant_count);
+
+out:
+    filp_close(fp, NULL);
+    revert_creds(saved);
+}
+
 int ksu_fina_dynamic_set_signs(const struct ksu_fina_dynamic_manager_sign *signs, u32 count)
 {
     u32 i;
@@ -126,6 +272,7 @@ int ksu_fina_dynamic_set_signs(const struct ksu_fina_dynamic_manager_sign *signs
         fina_apps[i].version_code = 0;
     }
     mutex_unlock(&profile_dynamic_lock);
+    ksu_fina_dynamic_save();
     return 0;
 }
 
@@ -171,6 +318,7 @@ int ksu_fina_dynamic_set_grants(const __u32 *appids, u32 count)
         fina_add_app_locked(appids[i], 0, FINA_APP_GRANTED);
     fina_grants_strict = true;
     mutex_unlock(&profile_dynamic_lock);
+    ksu_fina_dynamic_save();
     return 0;
 }
 

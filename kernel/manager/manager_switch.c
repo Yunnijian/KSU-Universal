@@ -92,6 +92,8 @@ static ssize_t ksu_manager_switch_write(struct file *file, const char __user *ub
 
     ksu_manager_set_active(package);
     ksu_manager_ops_select(identity->profile);
+    if (ksu_manager_ops_current()->activate)
+        ksu_manager_ops_current()->activate();
     ksu_set_manager_appid(uid % KSU_PER_USER_RANGE);
     ksu_throne_tracker_invalidate_cache();
     if (identity->profile != KSU_MANAGER_PROFILE_FINA)
@@ -100,7 +102,8 @@ static ssize_t ksu_manager_switch_write(struct file *file, const char __user *ub
         ksu_feature_reset_non_upstream();
         ksu_extension_reset_non_upstream();
     }
-    if (identity->profile == KSU_MANAGER_PROFILE_BAKA)
+    if (identity->profile == KSU_MANAGER_PROFILE_BAKA ||
+        identity->profile == KSU_MANAGER_PROFILE_FINA)
         track_throne(false);
     pr_info("manager switch: primary=%s (%s) uid=%u\n", package,
             ksu_manager_profile_name(identity->profile), uid);

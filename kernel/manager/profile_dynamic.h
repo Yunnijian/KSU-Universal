@@ -12,6 +12,8 @@ u32 ksu_fina_dynamic_get_apps(void __user *apps, u32 capacity, u32 *total);
 int ksu_fina_dynamic_set_grants(const __u32 *appids, u32 count);
 bool ksu_fina_dynamic_uid_authorized(uid_t uid);
 bool ksu_fina_dynamic_version_code(uid_t uid, u32 *version);
+void ksu_fina_dynamic_load(void);
+void ksu_fina_dynamic_save(void);
 
 struct ksu_baka_manager_record {
     u32 appid;

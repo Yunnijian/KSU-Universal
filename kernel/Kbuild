@@ -2,6 +2,7 @@ kernelsu-objs := core/init.o
 
 kernelsu-objs += feature/kernel_umount.o
 kernelsu-objs += feature/baka_compat.o
+kernelsu-objs += feature/fina_module_filter.o
 kernelsu-objs += feature/module_load_filter.o
 kernelsu-objs += feature/module_blacklist.o
 kernelsu-objs += feature/mount_hide.o
