@@ -9,6 +9,7 @@
 
 #include "feature/baka_compat.h"
 #include "feature/kernel_umount.h"
+#include "feature/module_load_filter.h"
 #include "hook/setuid_hook.h"
 #include "klog.h" // IWYU pragma: keep
 #include "manager/manager_ops.h"
@@ -24,6 +25,7 @@ static const struct ksu_manager_ops ksu_baka_ops = {
     .name = "baka",
     .setuid = ksu_baka_setuid,
     .umount = ksu_handle_umount_baka,
+    .module_load = ksu_baka_module_load,
     .deactivate = ksu_baka_deactivate,
 };
 

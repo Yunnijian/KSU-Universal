@@ -2,12 +2,14 @@ kernelsu-objs := core/init.o
 
 kernelsu-objs += feature/kernel_umount.o
 kernelsu-objs += feature/baka_compat.o
+kernelsu-objs += feature/module_load_filter.o
 kernelsu-objs += feature/module_blacklist.o
 kernelsu-objs += feature/mount_hide.o
 kernelsu-objs += feature/sulog.o
 kernelsu-objs += feature/sucompat.o
 
 kernelsu-objs += hook/lsm_hook.o
+kernelsu-objs += hook/module_load_hook.o
 kernelsu-objs += hook/setuid_hook.o
 kernelsu-objs += manager/manager_ops.o
 kernelsu-objs += hook/syscall_event_bridge.o
