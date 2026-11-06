@@ -23,9 +23,12 @@ struct ksu_manager_ops {
 hot paths read it with `READ_ONCE`. The table is selected by
 `/proc/kernelsu_manager` together with the active manager identity.
 
-`module_load` returns `*handled = false` to let the shared dispatcher call the
+`module_load` returns `*handled = false` to let the direct hook call the
 original syscall. A profile that wants to filter a load sets `*handled = true`
-and returns the value userspace should observe.
+and returns the value userspace should observe. `init_module`/`finit_module`
+are hooked directly in the syscall table, not through the sys_enter
+dispatcher: the filters parse ELF and may read a file, which is not safe in
+tracepoint context.
 
 ## Profile mapping
 

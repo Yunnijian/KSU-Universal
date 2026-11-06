@@ -72,8 +72,9 @@ SukiSU 的 UAPI 保留官方 KernelSU 基线，并扩展了 extension、动态�
 5. **ops 层**：`manager/manager_ops.c` 为每个 profile 保存
    `setuid`/`umount`/`module_load`/`dynamic_load`/`dynamic_save` 等控制流；
    切换 profile 时只替换 ops 表，不替换 hook 后端。`init_module`/
-   `finit_module` 共用同一个 module_load dispatcher，未配置过滤的
-   profile 直接调用原 syscall。
+   `finit_module` 使用直接 syscall 表 hook（与 Baka/Fina 原实现一致），
+   因为模块过滤需要读 ELF/文件，不能在 tracepoint 上下文执行；未配置
+   过滤的 profile 直接调用原 syscall。
 
 `throne_tracker` 只加冕 active package；切换时清理 active-manager APK
 缓存，避免五家同时安装时扫描到错误目标。`/proc/kernelsu_manager` 的写入
@@ -203,11 +204,13 @@ cargo build --release -p ksud --target aarch64-linux-android
     `baka: mark /data/adb/ksud read write`；
   - Fina 激活时从 `/data/adb/ksu/dynamic_manager` 载入 1 个签名，
     切走再切回后文件内容与备份逐字节一致。
+- 复测发现：模块过滤最初接在 tracepoint dispatcher 上，ELF/文件 I/O
+  在 sys_enter 上下文执行导致内核卡死；已改为直接 syscall 表 hook，并
+  重新构建两个 KMI。该修复仍需真机复测。
 - 仍待运行时验证：Baka `block_modules`/Fina `vivo_module_filter` 的命中
-  模块路径（需要带模块参数重新加载；本次带参数复测触发过一次 98260 竞态
-  重启，未取得命中日志）、Baka umount 的实际挂载场景，以及 6.12.69 /
-  V2505A 设备回归。真机验证使用的是 `/data/local/tmp` 临时 loader；发布
-  App 前需要把新 KO 重新嵌入正式 loader。
+  模块路径、Baka umount 的实际挂载场景，以及 6.12.69 / V2505A 设备回归。
+  真机验证使用的是 `/data/local/tmp` 临时 loader；发布 App 前需要把新 KO
+  重新嵌入正式 loader。
 
 ## 目录结构
 
