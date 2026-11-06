@@ -114,12 +114,19 @@ Device evidence on PYB110 (6.18.21 `g7fcbff`):
 - FinaSU loaded 1 signature from `/data/adb/ksu/dynamic_manager`; switching
   away and back preserved the file byte-for-byte.
 
+Module-filter runtime evidence (6.12 KO used as a safe test module on 6.18):
+
+- BakaSU `block_modules=kernelsu`: `insmod` returned 0 and dmesg showed
+  `module_load_filter: block kernelsu load due to it in blocklist`;
+- FinaSU `vivo_module_filter=kernelsu`: `insmod` returned 0 and dmesg showed
+  `init_module_filter: acknowledged finit_module for target module`;
+- no hang after switching the hooks from the sys_enter dispatcher to direct
+  syscall-table hooks.
+
 Still pending:
 
-1. `block_modules` / `vivo_module_filter` hit paths (need a reload with
-   module parameters);
-2. Baka umount with an actually mounted module;
-3. FinaSU netisolate/UTS view/mount_view_filter regression on the new ops;
-4. 6.12.69 and V2505A runtime checks;
-5. rebuilding the production App loader with the new KO (the device test
+1. Baka umount with an actually mounted module;
+2. FinaSU netisolate/UTS view/mount_view_filter regression on the new ops;
+3. 6.12.69 and V2505A runtime checks;
+4. rebuilding the production App loader with the new KO (the device test
    used `/data/local/tmp/ksud-new`).

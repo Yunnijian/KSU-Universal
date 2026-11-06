@@ -206,11 +206,16 @@ cargo build --release -p ksud --target aarch64-linux-android
     切走再切回后文件内容与备份逐字节一致。
 - 复测发现：模块过滤最初接在 tracepoint dispatcher 上，ELF/文件 I/O
   在 sys_enter 上下文执行导致内核卡死；已改为直接 syscall 表 hook，并
-  重新构建两个 KMI。该修复仍需真机复测。
-- 仍待运行时验证：Baka `block_modules`/Fina `vivo_module_filter` 的命中
-  模块路径、Baka umount 的实际挂载场景，以及 6.12.69 / V2505A 设备回归。
-  真机验证使用的是 `/data/local/tmp` 临时 loader；发布 App 前需要把新 KO
-  重新嵌入正式 loader。
+  重新构建两个 KMI。
+- 模块过滤命中路径已复测（用 6.12 KO 作为安全测试模块）：
+  - BakaSU `block_modules=kernelsu`：`insmod` 返回 0，dmesg 出现
+    `module_load_filter: block kernelsu load due to it in blocklist`；
+  - FinaSU `vivo_module_filter=kernelsu`：`insmod` 返回 0，dmesg 出现
+    `init_module_filter: acknowledged finit_module for target module`；
+  - 两次都未出现卡死。
+- 仍待运行时验证：Baka umount 的实际挂载场景、6.12.69 / V2505A 设备
+  回归。真机验证使用的是 `/data/local/tmp` 临时 loader；发布 App 前需要
+  把新 KO 重新嵌入正式 loader。
 
 ## 目录结构
 
