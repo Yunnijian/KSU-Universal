@@ -11,6 +11,9 @@ void ksu_kernel_umount_exit(void);
 // Handler function to be called from setresuid hook
 int ksu_handle_umount(uid_t old_uid, uid_t new_uid);
 
+// BakaSU profile: setuid already checked zygote, so no second zygote gate.
+int ksu_handle_umount_baka(uid_t old_uid, uid_t new_uid);
+
 // for the umount list
 struct mount_entry {
     char *umountable;

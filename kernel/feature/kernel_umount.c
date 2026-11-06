@@ -125,6 +125,31 @@ int ksu_handle_umount(uid_t old_uid, uid_t new_uid)
     return 0;
 }
 
+int ksu_handle_umount_baka(uid_t old_uid, uid_t new_uid)
+{
+    const struct cred *saved;
+    struct mount_entry *entry;
+
+    (void)old_uid;
+
+    if (!ksu_module_mounted || !ksu_kernel_umount_enabled)
+        return 0;
+
+    pr_info("handle umount (baka) for uid: %d, pid: %d\n", new_uid, current->pid);
+
+    saved = override_creds(ksu_cred);
+
+    down_read(&mount_list_lock);
+    list_for_each_entry (entry, &mount_list, list) {
+        pr_info("%s: unmounting: %s flags 0x%x\n", __func__, entry->umountable, entry->flags);
+        try_umount(entry->umountable, entry->flags);
+    }
+    up_read(&mount_list_lock);
+
+    revert_creds(saved);
+    return 0;
+}
+
 void __init ksu_kernel_umount_init(void)
 {
     if (ksu_register_feature_handler(&kernel_umount_handler)) {

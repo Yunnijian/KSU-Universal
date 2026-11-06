@@ -87,6 +87,9 @@ static ssize_t ksu_manager_switch_write(struct file *file, const char __user *ub
     if (!ksu_check_apk_signature(apk_path, identity->cert_size, identity->cert_hash))
         return -EKEYREJECTED;
 
+    if (ksu_manager_ops_current()->deactivate)
+        ksu_manager_ops_current()->deactivate();
+
     ksu_manager_set_active(package);
     ksu_manager_ops_select(identity->profile);
     ksu_set_manager_appid(uid % KSU_PER_USER_RANGE);

@@ -7,6 +7,7 @@
  */
 #include <linux/compiler.h>
 
+#include "feature/baka_compat.h"
 #include "feature/kernel_umount.h"
 #include "hook/setuid_hook.h"
 #include "klog.h" // IWYU pragma: keep
@@ -19,11 +20,19 @@ static const struct ksu_manager_ops ksu_default_ops = {
     .umount = ksu_handle_umount,
 };
 
-/* Baka/Fina tables are filled in once their compat paths are ported. */
+static const struct ksu_manager_ops ksu_baka_ops = {
+    .name = "baka",
+    .setuid = ksu_baka_setuid,
+    .umount = ksu_handle_umount_baka,
+    .deactivate = ksu_baka_deactivate,
+};
+
+/* Fina/Next tables are filled in once their compat paths are ported. */
 static const struct ksu_manager_ops *ksu_ops_for_profile(enum ksu_manager_profile profile)
 {
     switch (profile) {
     case KSU_MANAGER_PROFILE_BAKA:
+        return &ksu_baka_ops;
     case KSU_MANAGER_PROFILE_FINA:
     case KSU_MANAGER_PROFILE_NEXT:
     case KSU_MANAGER_PROFILE_OFFICIAL:
