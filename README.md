@@ -41,6 +41,13 @@
 - **FinaSU 可选功能**：netisolate（27-32）、per-process UTS view
   （feature 9 / ioctl 25-26）、mount view filter（feature 10）和
   `GET_TRY_UMOUNT`（33）已按 Fina 行为接入。
+- **BakaSU 行为补齐**：Baka profile 使用 Baka 的 setuid/zygote 语义、
+  `/data/adb/ksud` 只读保护、Baka 版 umount 流程和 root profile 的
+  `CAP_DAC_READ_SEARCH`；`block_modules` 参数启用模块加载过滤（命中的
+  模块返回成功但不实际加载）。
+- **FinaSU 行为补齐**：`vivo_module_filter` 参数启用 vivo 模块过滤；
+  动态管理器按 Fina `KSUM` v2 格式持久化到
+  `/data/adb/ksu/dynamic_manager`，切换进入 Fina 时加载，切走时保存。
 - **状态查询**：`/proc/kernelsu_manager` 可由 root 读取，返回当前
   profile、versionCode 和 feature_max。
 
@@ -62,6 +69,11 @@ SukiSU 的 UAPI 保留官方 KernelSU 基线，并扩展了 extension、动态�
 4. **ioctl 层**：BakaSU 103/105/106、FinaSU 22-33/29 以及 SukiSU
    extension 均按 profile 门控；UTS view、netisolate、动态管理器状态由
    各 profile 自己的实现承接。
+5. **ops 层**：`manager/manager_ops.c` 为每个 profile 保存
+   `setuid`/`umount`/`module_load`/`dynamic_load`/`dynamic_save` 等控制流；
+   切换 profile 时只替换 ops 表，不替换 hook 后端。`init_module`/
+   `finit_module` 共用同一个 module_load dispatcher，未配置过滤的
+   profile 直接调用原 syscall。
 
 `throne_tracker` 只加冕 active package；切换时清理 active-manager APK
 缓存，避免五家同时安装时扫描到错误目标。`/proc/kernelsu_manager` 的写入
@@ -176,6 +188,16 @@ cargo build --release -p ksud --target aarch64-linux-android
 6.12 产物使用 `android16-6.12` GKI 6.12.76 KDIR 编译，尚未在 6.12.69
 设备上完成运行时回归。
 
+### 2026-11-06 补齐后的验证状态
+
+- 6.18 / 6.12 双 KMI 均已重新编译通过：
+  - `ksu_universal-android17-6.18.ko`，vermagic `6.18.21-4k`；
+  - `ksu_universal-android16-6.12.ko`，vermagic `6.12.76-4k`。
+- 新增的 profile ops、Baka setuid/ksud 保护/umount、Baka module filter、
+  Fina module filter 和 Fina 动态管理器持久化，尚待在 PYB110 / 6.12.69 /
+  V2505A 真机上做逐项切换回归；在此之前按“代码与构建已验证”看待，不当作
+  运行时已验证。
+
 ## 目录结构
 
 ```text
@@ -194,6 +216,12 @@ dist/          打包产物（不提交到源码仓库）
   它们都不会切换 active profile 的版本/feature 表面。
 - 官方/Next/Baka 的 ABI、feature、extension 和授权面已隔离，但模块以
   SukiSU 内核实现为底座，不复制三家各自的内核私有行为。
+- **不支持 Baka 的 manual hook / LSM magic hook / arm32 hook**：Baka 的
+  `KSU_MANUAL_HOOK` 依赖 `KSU != m`，且 6.8+ 需要改 `kernel/sys.c` 等
+  内核源码；stock 6.18 内核没有这些调用点，LKM 无法在运行时安装。
+- **不内置 Baka/Fina 的 inline SUSFS frontend**：BakaSU/FinaSU 的
+  `KSU_SUSFS` 只是 KernelSU 侧接口，真正的 SUSFS 实现仍是外部 SUSFS
+  guard LKM；两者通过各自的 hook/supercall 协作，不合并进本 KO。
 - 通用 KO 与 stock KSU 同名同 hook，必须在无 KSU 已加载的干净 boot
   上首次加载；已加载 `kernelsu` 时不能热替换。
 
